@@ -13,7 +13,7 @@
 
 ## 安装
 
-像安装其他ErisPulse模块或适配器一样安装本适配器，通常通过pip：
+像安装其他ErisPulse模块或适配器一样安装本适配器：
 
 ```bash
 epsdk install Email
