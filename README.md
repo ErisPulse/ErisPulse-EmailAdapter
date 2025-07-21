@@ -16,7 +16,7 @@
 像安装其他ErisPulse模块或适配器一样安装本适配器，通常通过pip：
 
 ```bash
-pip install ErisPulse-EmailAdapter
+epsdk install Email
 ```
 
 如果与ErisPulse安装在同一个Python环境中，它将被自动发现。
