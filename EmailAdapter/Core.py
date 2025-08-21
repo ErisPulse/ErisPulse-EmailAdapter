@@ -228,7 +228,6 @@ class EmailAdapter(BaseAdapter):
                 }
 
     async def _send_email(self, account_id: str, msg: MIMEMultipart):
-        """实际发送邮件"""
         account = self.accounts[account_id]
         
         try:
@@ -245,13 +244,12 @@ class EmailAdapter(BaseAdapter):
             smtp.send_message(msg)
     
     async def _connect_smtp(self, account_id: str):
-        """连接SMTP服务器"""
         account = self.accounts[account_id]
         
         if account_id in self.smtp_connections:
             try:
                 self.smtp_connections[account_id].quit()
-            except:
+            except Exception:
                 pass
         
         context = ssl.create_default_context()
@@ -282,7 +280,7 @@ class EmailAdapter(BaseAdapter):
         if account_id in self.imap_connections:
             try:
                 self.imap_connections[account_id].logout()
-            except:
+            except Exception:
                 pass
         
         context = ssl.create_default_context()
@@ -298,7 +296,6 @@ class EmailAdapter(BaseAdapter):
         self.imap_connections[account_id] = imap
     
     async def _poll_emails(self, account_id: str):
-        """轮询邮箱获取新邮件"""
         poll_interval = self.global_config.get("poll_interval", 60)
         max_retries = self.global_config.get("max_retries", 3)
         
@@ -319,9 +316,8 @@ class EmailAdapter(BaseAdapter):
                             raw_email = data[0][1]
                             email_message = email.message_from_bytes(raw_email)
                             
-                            # 转换为标准事件
+                            # 转换为标准事件并提交
                             event = self._convert_email_to_event(email_message, account_id)
-                            await self.emit("email", event)
                             await sdk.adapter.emit(event)
 
                 await asyncio.sleep(poll_interval)
@@ -340,7 +336,6 @@ class EmailAdapter(BaseAdapter):
                         await asyncio.sleep(5)
     
     def _convert_email_to_event(self, email_message: email.message.Message, account_id: str) -> Dict:
-        """将邮件转换为标准事件格式"""
         # 解析邮件内容
         def decode_header(header):
             from email.header import decode_header
@@ -350,7 +345,7 @@ class EmailAdapter(BaseAdapter):
                 if isinstance(part, bytes):
                     try:
                         part = part.decode(encoding or 'utf-8')
-                    except:
+                    except Exception:
                         part = part.decode('utf-8', errors='replace')
                 parts.append(part)
             return ''.join(parts)
@@ -432,18 +427,15 @@ class EmailAdapter(BaseAdapter):
             },
             "attachments": attachments
         }
-    
     def _parse_email_date(self, date_str: str) -> int:
-        """解析邮件日期为时间戳"""
         from email.utils import parsedate_to_datetime
         try:
             dt = parsedate_to_datetime(date_str)
             return int(dt.timestamp())
-        except:
+        except ValueError:
             return int(time.time())
     
     async def call_api(self, endpoint: str, **params):
-        """实现BaseAdapter要求的call_api方法"""
         if endpoint == "send":
             return await self.Send(self).Text(params.get("content", "")).send()
         elif endpoint == "send_html":
@@ -458,7 +450,6 @@ class EmailAdapter(BaseAdapter):
             }
     
     async def start(self):
-        """启动适配器"""
         if not self.accounts:
             self.logger.warning("No email accounts configured")
             return
@@ -478,7 +469,6 @@ class EmailAdapter(BaseAdapter):
                 self.poll_tasks[account_id] = asyncio.create_task(self._poll_emails(account_id))
     
     async def shutdown(self):
-        """关闭适配器"""
         self._is_running = False
         
         # 取消所有轮询任务
@@ -490,7 +480,7 @@ class EmailAdapter(BaseAdapter):
         for account_id, smtp in self.smtp_connections.items():
             try:
                 smtp.quit()
-            except:
+            except Exception:
                 pass
         self.smtp_connections.clear()
         
@@ -498,6 +488,6 @@ class EmailAdapter(BaseAdapter):
         for account_id, imap in self.imap_connections.items():
             try:
                 imap.logout()
-            except:
+            except Exception:
                 pass
         self.imap_connections.clear()
