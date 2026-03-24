@@ -11,6 +11,7 @@ from pathlib import Path
 import ssl
 import time
 from dataclasses import dataclass
+import aiohttp
 
 from ErisPulse import sdk
 from ErisPulse.Core import BaseAdapter
@@ -206,7 +207,7 @@ class EmailAdapter(BaseAdapter):
             return await self._send()
         
         def _add_attachment_from_segment(self, data: Dict, content_type: str):
-            """从消息段数据添加附件"""
+            """从消息段数据添加附件，支持本地路径"""
             url = data.get("url")
             file_id = data.get("file_id")
             path = data.get("path")
@@ -214,7 +215,13 @@ class EmailAdapter(BaseAdapter):
             if url:
                 self._attachments.append((url, f"{content_type}_{path or file_id}", f"application/{content_type}"))
             elif path:
-                self._attachments.append((path, f"{content_type}_{file_id}", f"application/{content_type}"))
+                # 本地路径，检查文件是否存在
+                from pathlib import Path
+                file_path = Path(path)
+                if not file_path.exists():
+                    raise FileNotFoundError(f"文件不存在: {path}")
+                filename = f"{content_type}_{file_id}" if file_id else file_path.name
+                self._attachments.append((path, filename, f"application/{content_type}"))
             elif file_id:
                 self._attachments.append((file_id, f"{content_type}_{file_id}", f"application/{content_type}"))
         
@@ -229,6 +236,18 @@ class EmailAdapter(BaseAdapter):
         def Attachment(self, file: Union[str, Path, BinaryIO], filename: str = None, 
                       mime_type: str = "application/octet-stream"):
             """添加附件"""
+            # 如果是字符串或Path，检查是否为本地文件路径（排除URL）
+            if isinstance(file, (str, Path)):
+                # 如果是URL，直接使用，不检查文件存在性
+                if isinstance(file, str) and file.startswith(("http://", "https://")):
+                    pass
+                else:
+                    # 本地文件路径，检查文件是否存在
+                    from pathlib import Path
+                    file_path = Path(file)
+                    if not file_path.exists():
+                        raise FileNotFoundError(f"文件不存在: {file_path}")
+            
             self._attachments.append((file, filename, mime_type))
             return self
         
@@ -313,12 +332,26 @@ class EmailAdapter(BaseAdapter):
                 file, filename, mime_type = attachment
                 
                 if isinstance(file, (str, Path)):
-                    with open(file, "rb") as f:
-                        part = MIMEApplication(f.read(), Name=filename or Path(file).name)
+                    # 检查是否为 URL
+                    if isinstance(file, str) and file.startswith(("http://", "https://")):
+                        # 异步下载 URL 内容
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(file, timeout=30) as response:
+                                response.raise_for_status()
+                                file_data = await response.read()
+                        file_name = filename or file.split('/')[-1]
+                    else:
+                        # 本地文件路径
+                        with open(file, "rb") as f:
+                            file_data = f.read()
+                        file_name = filename or Path(file).name
                 else:
-                    part = MIMEApplication(file.read(), Name=filename)
+                    # 二进制数据
+                    file_data = file.read()
+                    file_name = filename
                 
-                part["Content-Disposition"] = f'attachment; filename="{filename}"'
+                part = MIMEApplication(file_data, Name=file_name)
+                part["Content-Disposition"] = f'attachment; filename="{file_name}"'
                 msg.attach(part)
             
             # 发送邮件
