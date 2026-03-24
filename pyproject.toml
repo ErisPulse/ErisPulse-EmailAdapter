@@ -3,12 +3,28 @@ name = "ErisPulse-EmailAdapter"
 version = "1.2.0"
 description = "ErisPulse邮箱适配器，支持多账号管理、HTML内容和附件发送"
 readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
 authors = [
     {name = "wsu2059q", email = "wsu2059@qq.com"}
 ]
+keywords = ["erispulse", "email", "adapter", "smtp", "imap"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Email",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 
 dependencies = [
-    
+
 ]
 
 [project.urls]
