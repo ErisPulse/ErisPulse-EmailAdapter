@@ -122,6 +122,9 @@ class EmailAdapter(BaseAdapter):
             self._cc = []
             self._bcc = []
             self._reply_to = None
+            self._in_reply_to = None  # 用于回复原始邮件的 Message-ID
+            self._at_emails = []  # @的用户（邮件中作为抄送）
+            self._at_all = False  # @全体成员（邮件群发）
         
         def Subject(self, subject: str):
             """设置邮件主题"""
@@ -131,12 +134,97 @@ class EmailAdapter(BaseAdapter):
         def Html(self, html: str):
             """设置HTML内容并发送邮件"""
             self._html = html
-            return self._send()
+            return asyncio.create_task(self._send())
         
         def Text(self, text: str):
             """设置纯文本内容并发送邮件"""
             self._text = text
-            return self._send()
+            return asyncio.create_task(self._send())
+        
+        def Raw_ob12(self, message, **kwargs):
+            """
+            发送原始 OneBot12 格式的消息
+            
+            :param message: OneBot12 格式的消息段或消息段数组
+            :param kwargs: 额外参数（如 subject, reply_to, in_reply_to 等）
+            :return: asyncio.Task 对象
+            """
+            return asyncio.create_task(self._process_raw_ob12(message, **kwargs))
+        
+        async def _process_raw_ob12(self, message, **kwargs):
+            """
+            处理 OneBot12 格式消息并转换为邮件发送
+            
+            :param message: OneBot12 格式的消息段或消息段数组
+            :param kwargs: 额外参数
+            :return: 发送结果
+            """
+            # 处理额外参数
+            if "subject" in kwargs:
+                self._subject = kwargs["subject"]
+            if "reply_to" in kwargs:
+                self._reply_to = kwargs["reply_to"]
+            if "in_reply_to" in kwargs:
+                self._in_reply_to = kwargs["in_reply_to"]
+            
+            # 统一处理为消息段数组
+            if isinstance(message, dict) and message.get("type") in ["text", "image", "video", "file", "audio"]:
+                segments = [message]
+            elif isinstance(message, list):
+                segments = message
+            else:
+                raise ValueError("Invalid message format, expected OneBot12 message segment or array")
+            
+            # 解析消息段
+            for segment in segments:
+                seg_type = segment.get("type")
+                data = segment.get("data", {})
+                
+                if seg_type == "text":
+                    self._text = data.get("text", "")
+                elif seg_type == "image":
+                    self._add_attachment_from_segment(data, "image")
+                elif seg_type == "video":
+                    self._add_attachment_from_segment(data, "video")
+                elif seg_type == "file":
+                    self._add_attachment_from_segment(data, "file")
+                elif seg_type == "audio":
+                    self._add_attachment_from_segment(data, "audio")
+                elif seg_type == "markdown":
+                    self._html = self._markdown_to_html(data.get("markdown", ""))
+                elif seg_type == "at":
+                    # @用户，添加到抄送
+                    user_id = data.get("user_id")
+                    if user_id:
+                        self._at_emails.append(user_id)
+                elif seg_type == "atall":
+                    self._at_all = True
+                else:
+                    # 不支持的类型，转换为文本
+                    self._text += f"\n[Unsupported segment type: {seg_type}]"
+            
+            return await self._send()
+        
+        def _add_attachment_from_segment(self, data: Dict, content_type: str):
+            """从消息段数据添加附件"""
+            url = data.get("url")
+            file_id = data.get("file_id")
+            path = data.get("path")
+            
+            if url:
+                self._attachments.append((url, f"{content_type}_{path or file_id}", f"application/{content_type}"))
+            elif path:
+                self._attachments.append((path, f"{content_type}_{file_id}", f"application/{content_type}"))
+            elif file_id:
+                self._attachments.append((file_id, f"{content_type}_{file_id}", f"application/{content_type}"))
+        
+        def _markdown_to_html(self, markdown: str) -> str:
+            """简单的 Markdown 到 HTML 转换"""
+            html = markdown
+            # 简单的转换规则
+            html = html.replace("**", "<strong>").replace("*", "<em>")
+            html = html.replace("# ", "<h1>").replace("\n", "<br>")
+            return html
         
         def Attachment(self, file: Union[str, Path, BinaryIO], filename: str = None, 
                       mime_type: str = "application/octet-stream"):
@@ -163,6 +251,21 @@ class EmailAdapter(BaseAdapter):
             self._reply_to = email
             return self
         
+        def At(self, email: str) -> 'Send':
+            """@用户（添加到抄送）"""
+            self._at_emails.append(email)
+            return self
+        
+        def AtAll(self) -> 'Send':
+            """@全体成员（标记为群发邮件）"""
+            self._at_all = True
+            return self
+        
+        def Reply(self, message_id: str) -> 'Send':
+            """回复消息（设置 In-Reply-To 头）"""
+            self._in_reply_to = message_id
+            return self
+        
         async def _send(self):
             """内部发送方法"""
             if not self._account_id and not self._adapter.accounts:
@@ -181,12 +284,23 @@ class EmailAdapter(BaseAdapter):
             msg["To"] = self._target_id if self._target_id else account.email
             msg["Subject"] = self._subject
             
-            if self._cc:
-                msg["Cc"] = ", ".join(self._cc)
+            # 处理抄送（包含 At 方法添加的邮件）
+            all_cc = list(self._cc)
+            all_cc.extend(self._at_emails)
+            if self._at_all:
+                # @全体成员：在主题中添加 [Broadcast] 标记
+                if not msg["Subject"].startswith("[Broadcast]"):
+                    msg["Subject"] = f"[Broadcast] {msg['Subject']}"
+            
+            if all_cc:
+                msg["Cc"] = ", ".join(all_cc)
             if self._bcc:
                 msg["Bcc"] = ", ".join(self._bcc)
             if self._reply_to:
                 msg["Reply-To"] = self._reply_to
+            if self._in_reply_to:
+                msg["In-Reply-To"] = self._in_reply_to
+                msg["References"] = self._in_reply_to
             
             # 添加正文
             if self._text:
@@ -208,14 +322,21 @@ class EmailAdapter(BaseAdapter):
                 msg.attach(part)
             
             # 发送邮件
+            message_id = uuid.uuid4().hex
+            msg["Message-ID"] = message_id
+            
             try:
-                await self._adapter._send_email(account_id, msg)
+                raw_response = await self._adapter._send_email(account_id, msg)
                 return {
                     "status": "ok",
                     "retcode": 0,
-                    "data": {"message": "Email sent successfully"},
-                    "message": "Email sent successfully",
-                    "message_id": uuid.uuid4().hex,
+                    "data": {
+                        "message_id": message_id,
+                        "time": time.time()
+                    },
+                    "message": "",
+                    "message_id": message_id,
+                    "email_raw": raw_response
                 }
             except Exception as e:
                 self._adapter.logger.error(f"Failed to send email: {str(e)}")
@@ -225,10 +346,16 @@ class EmailAdapter(BaseAdapter):
                     "data": None,
                     "message": str(e),
                     "message_id": "",
+                    "email_raw": None
                 }
 
-    async def _send_email(self, account_id: str, msg: MIMEMultipart):
+    async def _send_email(self, account_id: str, msg: MIMEMultipart) -> Dict:
         account = self.accounts[account_id]
+        response = {
+            "success": False,
+            "message_id": msg.get("Message-ID", ""),
+            "account": account.email
+        }
         
         try:
             if account_id not in self.smtp_connections:
@@ -236,12 +363,23 @@ class EmailAdapter(BaseAdapter):
             
             smtp = self.smtp_connections[account_id]
             smtp.send_message(msg)
+            response["success"] = True
+            response["message"] = "Email sent successfully"
         except Exception as e:
             self.logger.error(f"SMTP error: {str(e)}")
             # 尝试重新连接
-            await self._connect_smtp(account_id)
-            smtp = self.smtp_connections[account_id]
-            smtp.send_message(msg)
+            try:
+                await self._connect_smtp(account_id)
+                smtp = self.smtp_connections[account_id]
+                smtp.send_message(msg)
+                response["success"] = True
+                response["message"] = "Email sent successfully after reconnect"
+            except Exception as retry_error:
+                response["error"] = str(retry_error)
+                response["message"] = str(retry_error)
+                raise
+        
+        return response
     
     async def _connect_smtp(self, account_id: str):
         account = self.accounts[account_id]
@@ -336,6 +474,24 @@ class EmailAdapter(BaseAdapter):
                         await asyncio.sleep(5)
     
     def _convert_email_to_event(self, email_message: email.message.Message, account_id: str) -> Dict:
+        """
+        将邮件转换为 OneBot12 标准事件
+        
+        根据事件转换规范：
+        - 添加 email_raw_type 字段保存原始事件类型
+        - 确保时间戳为10位秒级
+        - 保留原始数据在 email_raw 字段
+        """
+        # 确定原始事件类型
+        # 检查是否为回复邮件
+        references = email_message.get("References", "")
+        in_reply_to = email_message.get("In-Reply-To", "")
+        
+        if references or in_reply_to:
+            raw_event_type = "email_reply"  # 回复邮件
+        else:
+            raw_event_type = "email_new"  # 新邮件
+        
         # 解析邮件内容
         def decode_header(header):
             from email.header import decode_header
@@ -416,15 +572,23 @@ class EmailAdapter(BaseAdapter):
             ],
             "alt_message": f"邮件: {subject}",
             "user_id": from_,
+            # 平台原始数据（包含完整邮件信息）
             "email_raw": {
                 "subject": subject,
                 "from": from_,
                 "to": to,
                 "date": date,
+                "message_id": email_message.get("Message-ID", ""),
+                "references": email_message.get("References", ""),
+                "in_reply_to": email_message.get("In-Reply-To", ""),
+                "cc": decode_header(email_message.get("Cc", "")),
+                "bcc": decode_header(email_message.get("Bcc", "")),
                 "text_content": text_content,
                 "html_content": html_content,
                 "attachments": [att["filename"] for att in attachments]
             },
+            # 原始事件类型
+            "email_raw_type": raw_event_type,
             "attachments": attachments
         }
     def _parse_email_date(self, date_str: str) -> int:
@@ -437,16 +601,43 @@ class EmailAdapter(BaseAdapter):
     
     async def call_api(self, endpoint: str, **params):
         if endpoint == "send":
-            return await self.Send(self).Text(params.get("content", "")).send()
+            send_instance = self.Send(
+                self,
+                target_type=params.get("target_type"),
+                target_id=params.get("recvId") or params.get("target_id"),
+                _account_id=params.get("account_id")
+            )
+            return await send_instance.Text(params.get("content", ""))
         elif endpoint == "send_html":
-            return await self.Send(self).Html(params.get("html", "")).send()
+            send_instance = self.Send(
+                self,
+                target_type=params.get("target_type"),
+                target_id=params.get("recvId") or params.get("target_id"),
+                _account_id=params.get("account_id")
+            )
+            return await send_instance.Html(params.get("html", ""))
+        elif endpoint == "/send_raw":
+            # 支持 Raw_ob12 方法调用
+            send_instance = self.Send(
+                self,
+                target_type=params.get("target_type"),
+                target_id=params.get("target_id"),
+                _account_id=params.get("account_id")
+            )
+            task = send_instance.Raw_ob12(
+                params.get("message"),
+                **{k: v for k, v in params.items() 
+                   if k not in ["message", "target_type", "target_id", "account_id"]}
+            )
+            return await task
         else:
             return {
                 "status": "failed",
                 "retcode": 10002,
                 "data": None,
                 "message": f"Unsupported endpoint: {endpoint}",
-                "message_id": ""
+                "message_id": "",
+                "email_raw": None
             }
     
     async def start(self):
