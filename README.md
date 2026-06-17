@@ -1,4 +1,121 @@
-# ErisPulse 邮箱适配器
+# ErisPulse Email Adapter
+
+[English](#english) | [中文](#中文)
+
+---
+
+<a id="english"></a>
+
+## English
+
+A powerful email adapter for the ErisPulse framework, enabling you to send and receive email messages as events within the ErisPulse ecosystem.
+
+### Features
+
+- **Multi-Account Support**: Configure multiple mailbox accounts, each with independent SMTP/IMAP settings
+- **Global Configuration**: Define global SMTP and IMAP settings that all accounts can inherit
+- **Email Polling**: Automatically checks mailbox accounts for new messages (unread emails) and converts them into standard ErisPulse events
+- **DSL Sending**: Send emails easily using the standard ErisPulse `Send` DSL
+- **Attachment Support**: Supports both sending and receiving email attachments
+- **HTML and Plain Text**: Supports both HTML and plain text email content
+
+### Installation
+
+Install this adapter like any other ErisPulse module or adapter:
+
+```bash
+epsdk install Email
+```
+
+If it is installed in the same Python environment as ErisPulse, it will be discovered automatically.
+
+### Configuration
+
+After the first run, the adapter generates a default configuration block in your `config.toml` file. You need to update it with your real mailbox account credentials.
+
+#### Configuration Example
+
+```toml
+[EmailAdapter.global]
+imap_server = "imap.example.com"  # Global IMAP server
+imap_port = 993                   # IMAP port
+smtp_server = "smtp.example.com"  # Global SMTP server
+smtp_port = 465                   # SMTP port
+ssl = true                        # Use SSL/TLS encryption
+timeout = 30                      # Connection timeout (seconds)
+poll_interval = 10                # Email polling interval (seconds)
+max_retries = 3                   # Maximum retries for failed connections
+
+[EmailAdapter.accounts."support@example.com"]
+email = "support@example.com"     # Account email address
+password = "yourpassword"         # Account password
+
+[EmailAdapter.accounts."user@example.com"]
+email = "user@example.com"
+password = "anotherpassword"
+```
+
+### Usage
+
+#### Sending Email
+
+Send emails using the standard ErisPulse `Send` DSL. The recipient should be the target email address.
+
+```python
+from ErisPulse import sdk
+
+# Send from the default account
+await sdk.adapter.mail.Send.To("recipient@example.com").Text("Greetings from ErisPulse!")
+
+# Send an email with a subject from a specific account
+await sdk.adapter.mail.Send.Using("support@example.com").To("client@company.com") \
+    .Subject("Important Update") \
+    .Attachment("document.pdf") \
+    .Text("Please review the document in the attachment.")
+
+# Send an HTML email
+html_content = """
+<h1>Welcome!</h1>
+<p>Thank you for using our service.</p>
+"""
+await sdk.adapter.mail.Send.To("user@example.com") \
+    .Subject("HTML Email").Html(html_content)
+```
+
+#### Receiving Email
+
+Received emails are automatically converted into standard `message` events. You can listen for them just like any other message.
+
+```python
+from ErisPulse import sdk, adapter
+
+@adapter.on("message")
+async def handle_email_messages(data: dict):
+    # Check whether the message comes from the email adapter
+    if data.get("platform") == "mail":
+        sender = data.get("user_id")
+        subject = data["email_raw"]["subject"]
+        content = data["email_raw"]["text_content"]
+
+        print(f"New email from: {sender}")
+        print(f"Subject: {subject}")
+        print(f"Content:\n{content}")
+
+        # Check attachments
+        if data.get("attachments"):
+            print(f"Attachments: {[a['filename'] for a in data['attachments']]}")
+
+        # Auto-reply example
+        await sdk.adapter.mail.Send.To(sender) \
+            .Subject(f"Re: {subject}") \
+            .Text("Your email has been received. We will reply as soon as possible.")
+```
+
+---
+
+<a id="中文"></a>
+
+## 中文
 
 一个为 ErisPulse 框架设计的强大邮箱适配器，支持在 ErisPulse 生态系统中以事件形式收发电子邮件。
 
