@@ -1,6 +1,6 @@
 [project]
 name = "ErisPulse-EmailAdapter"
-version = "4.0.1"
+version = "4.0.2"
 description = "ErisPulse邮箱适配器，支持多账号管理、HTML内容和附件发送"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -30,56 +30,56 @@ class EmailGlobalConfig(AdapterConfig):
     imap_server: str = field(
         default="imap.example.com",
         metadata={
-            "description": "默认 IMAP 服务器地址",
+            "description": "Default IMAP server address",
             "webui": {"widget": "text", "group": "imap", "order": 1},
         },
     )
     imap_port: int = field(
         default=993,
         metadata={
-            "description": "默认 IMAP 端口",
+            "description": "Default IMAP port",
             "webui": {"widget": "number", "group": "imap", "order": 2},
         },
     )
     smtp_server: str = field(
         default="smtp.example.com",
         metadata={
-            "description": "默认 SMTP 服务器地址",
+            "description": "Default SMTP server address",
             "webui": {"widget": "text", "group": "smtp", "order": 3},
         },
     )
     smtp_port: int = field(
         default=465,
         metadata={
-            "description": "默认 SMTP 端口",
+            "description": "Default SMTP port",
             "webui": {"widget": "number", "group": "smtp", "order": 4},
         },
     )
     ssl: bool = field(
         default=True,
         metadata={
-            "description": "默认是否启用 SSL",
+            "description": "Whether to enable SSL by default",
             "webui": {"widget": "switch", "group": "basic", "order": 5},
         },
     )
     timeout: int = field(
         default=30,
         metadata={
-            "description": "默认连接超时时间（秒）",
+            "description": "Default connection timeout (seconds)",
             "webui": {"widget": "number", "group": "basic", "order": 6},
         },
     )
     poll_interval: int = field(
         default=60,
         metadata={
-            "description": "IMAP 轮询间隔（秒）",
+            "description": "IMAP polling interval (seconds)",
             "webui": {"widget": "number", "group": "polling", "order": 7},
         },
     )
     max_retries: int = field(
         default=3,
         metadata={
-            "description": "连接失败最大重试次数",
+            "description": "Max retries for failed connections",
             "webui": {"widget": "number", "group": "polling", "order": 8},
         },
     )
@@ -92,7 +92,7 @@ class EmailAccountConfig(BotAccountConfig):
     email: str = field(
         default="",
         metadata={
-            "description": "邮箱地址",
+            "description": "Email address",
             "required": True,
             "secret": True,
             "webui": {"widget": "text", "group": "basic", "order": 1},
@@ -101,7 +101,7 @@ class EmailAccountConfig(BotAccountConfig):
     password: str = field(
         default="",
         metadata={
-            "description": "邮箱密码/授权码",
+            "description": "Email password / authorization code",
             "required": True,
             "secret": True,
             "webui": {"widget": "password", "group": "basic", "order": 2},
@@ -110,42 +110,42 @@ class EmailAccountConfig(BotAccountConfig):
     imap_server: Optional[str] = field(
         default=None,
         metadata={
-            "description": "IMAP 服务器地址（留空则使用全局默认）",
+            "description": "IMAP server address (leave empty to use global default)",
             "webui": {"widget": "text", "group": "imap", "order": 3},
         },
     )
     imap_port: Optional[int] = field(
         default=None,
         metadata={
-            "description": "IMAP 端口（留空则使用全局默认）",
+            "description": "IMAP port (leave empty to use global default)",
             "webui": {"widget": "number", "group": "imap", "order": 4},
         },
     )
     smtp_server: Optional[str] = field(
         default=None,
         metadata={
-            "description": "SMTP 服务器地址（留空则使用全局默认）",
+            "description": "SMTP server address (leave empty to use global default)",
             "webui": {"widget": "text", "group": "smtp", "order": 5},
         },
     )
     smtp_port: Optional[int] = field(
         default=None,
         metadata={
-            "description": "SMTP 端口（留空则使用全局默认）",
+            "description": "SMTP port (leave empty to use global default)",
             "webui": {"widget": "number", "group": "smtp", "order": 6},
         },
     )
     ssl: bool = field(
         default=True,
         metadata={
-            "description": "是否启用 SSL",
+            "description": "Enable SSL",
             "webui": {"widget": "switch", "group": "basic", "order": 7},
         },
     )
     timeout: int = field(
         default=30,
         metadata={
-            "description": "连接超时时间（秒）",
+            "description": "Connection timeout (seconds)",
             "webui": {"widget": "number", "group": "basic", "order": 8},
         },
     )
