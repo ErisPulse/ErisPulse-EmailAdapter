@@ -16,6 +16,7 @@ from ErisPulse.Core import adapter as adapter_mgr
 from ErisPulse.Core import client
 from ErisPulse.Core.Bases.adapter import BaseAdapter
 from ErisPulse.Core.config import config as config_mgr
+from ErisPulse.Core.i18n import i18n
 from ErisPulse.runtime.config_schema import (
     AdapterConfig,
     BotAccountConfig,
@@ -30,59 +31,69 @@ class EmailGlobalConfig(AdapterConfig):
     imap_server: str = field(
         default="imap.example.com",
         metadata={
-            "description": "Default IMAP server address",
-            "webui": {"widget": "text", "group": "imap", "order": 1},
+            "description": {"i18n": "email.imap_server", "default": "默认 IMAP 服务器地址"},
+            "ui": {"widget": "text", "group": "imap", "order": 1},
         },
     )
     imap_port: int = field(
         default=993,
         metadata={
-            "description": "Default IMAP port",
-            "webui": {"widget": "number", "group": "imap", "order": 2},
+            "description": {"i18n": "email.imap_port", "default": "默认 IMAP 端口"},
+            "ui": {"widget": "number", "group": "imap", "order": 2},
         },
     )
     smtp_server: str = field(
         default="smtp.example.com",
         metadata={
-            "description": "Default SMTP server address",
-            "webui": {"widget": "text", "group": "smtp", "order": 3},
+            "description": {"i18n": "email.smtp_server", "default": "默认 SMTP 服务器地址"},
+            "ui": {"widget": "text", "group": "smtp", "order": 3},
         },
     )
     smtp_port: int = field(
         default=465,
         metadata={
-            "description": "Default SMTP port",
-            "webui": {"widget": "number", "group": "smtp", "order": 4},
+            "description": {"i18n": "email.smtp_port", "default": "默认 SMTP 端口"},
+            "ui": {"widget": "number", "group": "smtp", "order": 4},
         },
     )
     ssl: bool = field(
         default=True,
         metadata={
-            "description": "Whether to enable SSL by default",
-            "webui": {"widget": "switch", "group": "basic", "order": 5},
+            "description": {"i18n": "email.ssl", "default": "是否默认启用 SSL"},
+            "ui": {"widget": "switch", "group": "basic", "order": 5},
         },
     )
     timeout: int = field(
         default=30,
         metadata={
-            "description": "Default connection timeout (seconds)",
-            "webui": {"widget": "number", "group": "basic", "order": 6},
+            "description": {"i18n": "email.timeout", "default": "默认连接超时（秒）"},
+            "ui": {"widget": "number", "group": "basic", "order": 6},
         },
     )
     poll_interval: int = field(
         default=60,
         metadata={
-            "description": "IMAP polling interval (seconds)",
-            "webui": {"widget": "number", "group": "polling", "order": 7},
+            "description": {"i18n": "email.poll_interval", "default": "IMAP 轮询间隔（秒）"},
+            "ui": {"widget": "number", "group": "polling", "order": 7},
         },
     )
     max_retries: int = field(
         default=3,
         metadata={
-            "description": "Max retries for failed connections",
-            "webui": {"widget": "number", "group": "polling", "order": 8},
+            "description": {"i18n": "email.max_retries", "default": "连接失败最大重试次数"},
+            "ui": {"widget": "number", "group": "polling", "order": 8},
         },
     )
+
+
+EmailGlobalConfig._schema_meta = {
+    "group_labels": {
+        "basic": {"i18n": "email.group.basic", "default": "基本设置"},
+        "imap": {"i18n": "email.group.imap", "default": "IMAP 设置"},
+        "smtp": {"i18n": "email.group.smtp", "default": "SMTP 设置"},
+        "polling": {"i18n": "email.group.polling", "default": "轮询设置"},
+    }
+}  # type: ignore[attr-defined]
 
 
 @dataclass
@@ -92,63 +103,72 @@ class EmailAccountConfig(BotAccountConfig):
     email: str = field(
         default="",
         metadata={
-            "description": "Email address",
+            "description": {"i18n": "email.account.email", "default": "邮箱地址"},
             "required": True,
             "secret": True,
-            "webui": {"widget": "text", "group": "basic", "order": 1},
+            "ui": {"widget": "text", "group": "basic", "order": 1},
         },
     )
     password: str = field(
         default="",
         metadata={
-            "description": "Email password / authorization code",
+            "description": {"i18n": "email.account.password", "default": "邮箱密码 / 授权码"},
             "required": True,
             "secret": True,
-            "webui": {"widget": "password", "group": "basic", "order": 2},
+            "ui": {"widget": "password", "group": "basic", "order": 2},
         },
     )
     imap_server: Optional[str] = field(
         default=None,
         metadata={
-            "description": "IMAP server address (leave empty to use global default)",
-            "webui": {"widget": "text", "group": "imap", "order": 3},
+            "description": {"i18n": "email.account.imap_server", "default": "IMAP 服务器地址（留空使用全局默认）"},
+            "ui": {"widget": "text", "group": "imap", "order": 3},
         },
     )
     imap_port: Optional[int] = field(
         default=None,
         metadata={
-            "description": "IMAP port (leave empty to use global default)",
-            "webui": {"widget": "number", "group": "imap", "order": 4},
+            "description": {"i18n": "email.account.imap_port", "default": "IMAP 端口（留空使用全局默认）"},
+            "ui": {"widget": "number", "group": "imap", "order": 4},
         },
     )
     smtp_server: Optional[str] = field(
         default=None,
         metadata={
-            "description": "SMTP server address (leave empty to use global default)",
-            "webui": {"widget": "text", "group": "smtp", "order": 5},
+            "description": {"i18n": "email.account.smtp_server", "default": "SMTP 服务器地址（留空使用全局默认）"},
+            "ui": {"widget": "text", "group": "smtp", "order": 5},
         },
     )
     smtp_port: Optional[int] = field(
         default=None,
         metadata={
-            "description": "SMTP port (leave empty to use global default)",
-            "webui": {"widget": "number", "group": "smtp", "order": 6},
+            "description": {"i18n": "email.account.smtp_port", "default": "SMTP 端口（留空使用全局默认）"},
+            "ui": {"widget": "number", "group": "smtp", "order": 6},
         },
     )
     ssl: bool = field(
         default=True,
         metadata={
-            "description": "Enable SSL",
-            "webui": {"widget": "switch", "group": "basic", "order": 7},
+            "description": {"i18n": "email.account.ssl", "default": "启用 SSL"},
+            "ui": {"widget": "switch", "group": "basic", "order": 7},
         },
     )
     timeout: int = field(
         default=30,
         metadata={
-            "description": "Connection timeout (seconds)",
-            "webui": {"widget": "number", "group": "basic", "order": 8},
+            "description": {"i18n": "email.account.timeout", "default": "连接超时（秒）"},
+            "ui": {"widget": "number", "group": "basic", "order": 8},
         },
     )
+
+
+EmailAccountConfig._schema_meta = {
+    "group_labels": {
+        "basic": {"i18n": "email.group.basic", "default": "基本设置"},
+        "imap": {"i18n": "email.group.imap", "default": "IMAP 设置"},
+        "smtp": {"i18n": "email.group.smtp", "default": "SMTP 设置"},
+    }
+}  # type: ignore[attr-defined]
 
 
 class EmailAdapter(BaseAdapter):
@@ -434,7 +454,7 @@ class EmailAdapter(BaseAdapter):
                 response["email_raw"] = raw_response
                 return response
             except Exception as e:
-                adapter.logger.error(f"Failed to send email: {str(e)}")
+                adapter.logger.error(i18n.t("email.send_failed", error=e, default="发送邮件失败: {error}"))
                 err = adapter.make_error(retcode=34000, message=str(e), raw=None)
                 err["email_raw"] = None
                 return err
@@ -448,6 +468,95 @@ class EmailAdapter(BaseAdapter):
         self.poll_tasks: Dict[str, asyncio.Task] = {}
         # 运行状态
         self._is_running = False
+        self._register_i18n()
+
+    def _register_i18n(self):
+        """注册配置字段与日志消息的 i18n 翻译"""
+        try:
+            from ErisPulse.runtime.config_schema import register_config_i18n
+            register_config_i18n(EmailGlobalConfig, "zh-CN", domain="email")
+            register_config_i18n(EmailAccountConfig, "zh-CN", domain="email")
+            register_config_i18n(EmailGlobalConfig, "en", {
+                "email.imap_server": "Default IMAP server address",
+                "email.imap_port": "Default IMAP port",
+                "email.smtp_server": "Default SMTP server address",
+                "email.smtp_port": "Default SMTP port",
+                "email.ssl": "Whether to enable SSL by default",
+                "email.timeout": "Default connection timeout (seconds)",
+                "email.poll_interval": "IMAP polling interval (seconds)",
+                "email.max_retries": "Max retries for failed connections",
+                "email.account.email": "Email address",
+                "email.account.password": "Email password / authorization code",
+                "email.account.imap_server": "IMAP server address (leave empty to use global default)",
+                "email.account.imap_port": "IMAP port (leave empty to use global default)",
+                "email.account.smtp_server": "SMTP server address (leave empty to use global default)",
+                "email.account.smtp_port": "SMTP port (leave empty to use global default)",
+                "email.account.ssl": "Enable SSL",
+                "email.account.timeout": "Connection timeout (seconds)",
+                "email.group.basic": "Basic",
+                "email.group.imap": "IMAP",
+                "email.group.smtp": "SMTP",
+                "email.group.polling": "Polling",
+            }, domain="email")
+            register_config_i18n(EmailAccountConfig, "en", {
+                "email.account.email": "Email address",
+                "email.account.password": "Email password / authorization code",
+                "email.account.imap_server": "IMAP server address (leave empty to use global default)",
+                "email.account.imap_port": "IMAP port (leave empty to use global default)",
+                "email.account.smtp_server": "SMTP server address (leave empty to use global default)",
+                "email.account.smtp_port": "SMTP port (leave empty to use global default)",
+                "email.account.ssl": "Enable SSL",
+                "email.account.timeout": "Connection timeout (seconds)",
+                "email.group.basic": "Basic",
+                "email.group.imap": "IMAP",
+                "email.group.smtp": "SMTP",
+            }, domain="email")
+        except Exception:
+            pass
+
+        zh_CN = {
+            "email.config_migrated": "已迁移旧版 [EmailAdapter.global] 配置到 [EmailAdapter]",
+            "email.old_config_detected": "检测到旧格式配置，建议迁移到 EmailAdapter.accounts 下",
+            "email.no_config_found": "未找到配置文件，创建默认账户配置",
+            "email.save_default_failed": "保存默认账户配置失败: {error}",
+            "email.account_missing_credentials": "账户 {name} 缺少 email 或 password 配置，已跳过",
+            "email.accounts_loaded": "Email 适配器初始化完成，共加载 {count} 个账户",
+            "email.no_enabled_accounts": "没有找到任何启用的 Email 账户配置",
+            "email.adapter_started": "Email 适配器启动完成，共 {count} 个账户",
+            "email.adapter_shutdown": "Email 适配器已关闭",
+            "email.smtp_error": "SMTP 错误: {error}",
+            "email.polling_error": "轮询 {name} 出错: {error}",
+            "email.reconnect_failed": "重连 {max} 次后仍失败",
+            "email.smtp_connect_failed": "SMTP 连接失败 {name}: {error}",
+            "email.send_failed": "发送邮件失败: {error}",
+            "email.unsupported_endpoint": "不支持的端点: {endpoint}",
+            "email.smtp_not_configured": "SMTP 服务器或端口未配置（账户 {name}），请检查全局配置或账户配置",
+            "email.imap_not_configured": "IMAP 服务器或端口未配置（账户 {name}），请检查全局配置或账户配置",
+        }
+        en = {
+            "email.config_migrated": "Migrated legacy [EmailAdapter.global] config to [EmailAdapter]",
+            "email.old_config_detected": "Old config format detected, please migrate to EmailAdapter.accounts",
+            "email.no_config_found": "No config found, creating default account config",
+            "email.save_default_failed": "Failed to save default account config: {error}",
+            "email.account_missing_credentials": "Account {name} missing email or password, skipped",
+            "email.accounts_loaded": "Email adapter initialized, loaded {count} account(s)",
+            "email.no_enabled_accounts": "No enabled Email account config found",
+            "email.adapter_started": "Email adapter started, {count} account(s) total",
+            "email.adapter_shutdown": "Email adapter shut down",
+            "email.smtp_error": "SMTP error: {error}",
+            "email.polling_error": "Polling error for {name}: {error}",
+            "email.reconnect_failed": "Failed to reconnect after {max} attempts",
+            "email.smtp_connect_failed": "Failed to connect SMTP for {name}: {error}",
+            "email.send_failed": "Failed to send email: {error}",
+            "email.unsupported_endpoint": "Unsupported endpoint: {endpoint}",
+            "email.smtp_not_configured": "SMTP server or port not configured (account {name}), please check global or account config",
+            "email.imap_not_configured": "IMAP server or port not configured (account {name}), please check global or account config",
+        }
+        try:
+            i18n.register("zh-CN", zh_CN, domain="email")
+            i18n.register("en", en, domain="email")
+        except Exception:
+            pass
 
     def _get_config_key(self) -> str:
         return "EmailAdapter"
@@ -461,7 +570,7 @@ class EmailAdapter(BaseAdapter):
             for k, v in old_global.items():
                 data.setdefault(k, v)
             config_mgr.setConfig(key, data, immediate=True)
-            self.logger.info("已迁移旧版 [EmailAdapter.global] 配置到 [EmailAdapter]")
+            self.logger.info(i18n.t("email.config_migrated", default="已迁移旧版 [EmailAdapter.global] 配置到 [EmailAdapter]"))
         return super()._load_config()
 
     def _load_accounts(self) -> dict:
@@ -474,7 +583,7 @@ class EmailAdapter(BaseAdapter):
             old_config = config_mgr.getConfig("EmailAdapter")
             if old_config and ("email" in old_config or "accounts" not in old_config):
                 self.logger.warning(
-                    "检测到旧格式配置，建议迁移到 EmailAdapter.accounts 下"
+                    i18n.t("email.old_config_detected", default="检测到旧格式配置，建议迁移到 EmailAdapter.accounts 下")
                 )
                 data = {
                     "default": {
@@ -484,7 +593,7 @@ class EmailAdapter(BaseAdapter):
                     }
                 }
             else:
-                self.logger.info("未找到配置文件，创建默认账户配置")
+                self.logger.info(i18n.t("email.no_config_found", default="未找到配置文件，创建默认账户配置"))
                 data = {
                     "default": {
                         "email": "user@example.com",
@@ -495,44 +604,47 @@ class EmailAdapter(BaseAdapter):
                 try:
                     config_mgr.setConfig(key, data)
                 except Exception as e:
-                    self.logger.error(f"保存默认账户配置失败: {str(e)}")
+                    self.logger.error(i18n.t("email.save_default_failed", error=e, default="保存默认账户配置失败: {error}"))
 
-        # 全局默认值（来自 ConfigClass 实例）
+        # 全局默认值（来自 ConfigClass 实例，实时读取）
         global_defaults = {}
-        cfg = self._config_instance
-        if cfg is not None:
-            for k in (
-                "imap_server",
-                "imap_port",
-                "smtp_server",
-                "smtp_port",
-                "ssl",
-                "timeout",
-            ):
-                global_defaults[k] = getattr(cfg, k, None)
+        try:
+            cfg = self.cfg
+            if cfg is not None:
+                for k in (
+                    "imap_server",
+                    "imap_port",
+                    "smtp_server",
+                    "smtp_port",
+                    "ssl",
+                    "timeout",
+                ):
+                    global_defaults[k] = getattr(cfg, k, None)
+        except Exception:
+            pass
 
         accounts = {}
         for name, account_data in data.items():
             if not isinstance(account_data, dict):
                 continue
 
-            # 合并全局默认值（账户级配置优先）
+            # 合并全局默认值（账户级配置优先，但 None 值不覆盖全局默认）
             merged = dict(global_defaults)
             # 兼容旧版嵌套 server 子结构
             server_block = account_data.get("server", {})
             if isinstance(server_block, dict):
                 merged.update({k: v for k, v in server_block.items() if v is not None})
-            merged.update({k: v for k, v in account_data.items() if k != "server"})
+            merged.update({k: v for k, v in account_data.items() if k != "server" and v is not None and v != ""})
 
             if not merged.get("email") or not merged.get("password"):
-                self.logger.error(f"账户 {name} 缺少 email 或 password 配置，已跳过")
+                self.logger.error(i18n.t("email.account_missing_credentials", name=name, default="账户 {name} 缺少 email 或 password 配置，已跳过"))
                 continue
 
             instance = dict_to_dataclass(EmailAccountConfig, merged)
             instance.name = name
             accounts[name] = instance
 
-        self.logger.info(f"Email 适配器初始化完成，共加载 {len(accounts)} 个账户")
+        self.logger.info(i18n.t("email.accounts_loaded", count=len(accounts), default="Email 适配器初始化完成，共加载 {count} 个账户"))
         return accounts
 
     async def _send_email(self, account_id: str, msg: MIMEMultipart) -> Dict:
@@ -552,7 +664,7 @@ class EmailAdapter(BaseAdapter):
             response["success"] = True
             response["message"] = "Email sent successfully"
         except Exception as e:
-            self.logger.error(f"SMTP error: {str(e)}")
+            self.logger.error(i18n.t("email.smtp_error", error=e, default="SMTP 错误: {error}"))
             # 尝试重新连接
             try:
                 await self._connect_smtp(account_id)
@@ -570,12 +682,21 @@ class EmailAdapter(BaseAdapter):
     async def _connect_smtp(self, account_id: str):
         account = self.accounts[account_id]
 
-        # DEBUG: 临时调试，打印实际使用的主机名/端口/SSL
-        self.logger.debug(
-            f"[DEBUG] _connect_smtp account={account_id} "
-            f"smtp_server={account.smtp_server!r} smtp_port={account.smtp_port!r} "
-            f"ssl={account.ssl!r} timeout={account.timeout!r}"
-        )
+        # 账户级配置优先，缺失时回退到全局配置
+        try:
+            cfg = self.cfg
+        except Exception:
+            cfg = None
+
+        smtp_server = account.smtp_server or (cfg.smtp_server if cfg else None)
+        smtp_port = account.smtp_port or (cfg.smtp_port if cfg else None)
+        use_ssl = account.ssl if account.ssl is not None else (cfg.ssl if cfg else True)
+        timeout = account.timeout or (cfg.timeout if cfg else 30)
+
+        if not smtp_server or not smtp_port:
+            raise ValueError(
+                i18n.t("email.smtp_not_configured", name=account_id, default="SMTP 服务器或端口未配置（账户 {name}），请检查全局配置或账户配置")
+            )
 
         if account_id in self.smtp_connections:
             try:
@@ -585,21 +706,19 @@ class EmailAdapter(BaseAdapter):
 
         context = ssl.create_default_context()
 
-        if account.ssl:
+        if use_ssl:
             smtp = smtplib.SMTP_SSL(
-                host=account.smtp_server,
-                port=account.smtp_port,
-                timeout=account.timeout,
+                host=smtp_server,
+                port=smtp_port,
+                timeout=timeout,
                 context=context,
             )
         else:
             smtp = smtplib.SMTP(
-                host=account.smtp_server,
-                port=account.smtp_port,
-                timeout=account.timeout,
+                host=smtp_server,
+                port=smtp_port,
+                timeout=timeout,
             )
-            if account.ssl:
-                smtp.starttls(context=context)
 
         smtp.login(account.email, account.password)
         self.smtp_connections[account_id] = smtp
@@ -607,6 +726,20 @@ class EmailAdapter(BaseAdapter):
     async def _connect_imap(self, account_id: str):
         """连接 IMAP 服务器"""
         account = self.accounts[account_id]
+
+        # 账户级配置优先，缺失时回退到全局配置
+        try:
+            cfg = self.cfg
+        except Exception:
+            cfg = None
+
+        imap_server = account.imap_server or (cfg.imap_server if cfg else None)
+        imap_port = account.imap_port or (cfg.imap_port if cfg else None)
+
+        if not imap_server or not imap_port:
+            raise ValueError(
+                i18n.t("email.imap_not_configured", name=account_id, default="IMAP 服务器或端口未配置（账户 {name}），请检查全局配置或账户配置")
+            )
 
         if account_id in self.imap_connections:
             try:
@@ -617,7 +750,7 @@ class EmailAdapter(BaseAdapter):
         context = ssl.create_default_context()
 
         imap = imaplib.IMAP4_SSL(
-            host=account.imap_server, port=account.imap_port, ssl_context=context
+            host=imap_server, port=imap_port, ssl_context=context
         )
 
         imap.login(account.email, account.password)
@@ -627,12 +760,14 @@ class EmailAdapter(BaseAdapter):
     async def _poll_emails(self, account_id: str):
         poll_interval = 60
         max_retries = 3
-        cfg = self._config_instance
-        if cfg is not None:
+        try:
+            cfg = self.cfg
             poll_interval = (
                 getattr(cfg, "poll_interval", poll_interval) or poll_interval
             )
             max_retries = getattr(cfg, "max_retries", max_retries) or max_retries
+        except Exception:
+            pass
 
         while self._is_running:
             try:
@@ -661,7 +796,7 @@ class EmailAdapter(BaseAdapter):
             except asyncio.CancelledError:
                 return
             except Exception as e:
-                self.logger.error(f"Polling error for {account_id}: {str(e)}")
+                self.logger.error(i18n.t("email.polling_error", name=account_id, error=e, default="轮询 {name} 出错: {error}"))
                 retries = 0
                 while retries < max_retries:
                     try:
@@ -671,7 +806,7 @@ class EmailAdapter(BaseAdapter):
                         retries += 1
                         if retries >= max_retries:
                             self.logger.error(
-                                f"Failed to reconnect after {max_retries} attempts"
+                                i18n.t("email.reconnect_failed", max=max_retries, default="重连 {max} 次后仍失败")
                             )
                             raise
                         await asyncio.sleep(5)
@@ -682,21 +817,23 @@ class EmailAdapter(BaseAdapter):
         """
         将邮件转换为 OneBot12 标准事件
 
-        - 添加 email_raw_type 字段保存原始事件类型
-        - 确保时间戳为10位秒级
-        - 保留原始数据在 email_raw 字段
+        遵循 ErisPulse 适配器标准化转换规范：
+        - user_id 为纯邮箱地址，user_nickname 为发件人显示名
+        - message 为标准 OB12 消息段（text + file）
+        - email_raw 保留完整原始数据（向后兼容）
         """
+        from email.utils import parseaddr
+
         # 确定原始事件类型
-        # 检查是否为回复邮件
         references = email_message.get("References", "")
         in_reply_to = email_message.get("In-Reply-To", "")
 
         if references or in_reply_to:
-            raw_event_type = "email_reply"  # 回复邮件
+            raw_event_type = "email_reply"
         else:
-            raw_event_type = "email_new"  # 新邮件
+            raw_event_type = "email_new"
 
-        # 解析邮件内容
+        # 解析邮件头
         def decode_header(header):
             from email.header import decode_header
 
@@ -716,7 +853,13 @@ class EmailAdapter(BaseAdapter):
         to = decode_header(email_message.get("To", ""))
         date = email_message.get("Date", "")
 
-        # 解析正文
+        # 从 From 头提取纯邮箱地址和显示名
+        # "Saber" <wsu2059@qq.com> -> ("Saber", "wsu2059@qq.com")
+        display_name, clean_email = parseaddr(from_)
+        if not display_name:
+            display_name = clean_email
+
+        # 解析正文和附件
         text_content = ""
         html_content = ""
         attachments = []
@@ -726,9 +869,9 @@ class EmailAdapter(BaseAdapter):
             content_disposition = str(part.get("Content-Disposition"))
 
             if "attachment" in content_disposition:
-                # 处理附件
                 filename = part.get_filename()
                 if filename:
+                    filename = decode_header(filename)
                     attachments.append(
                         {
                             "filename": filename,
@@ -738,7 +881,6 @@ class EmailAdapter(BaseAdapter):
                         }
                     )
             elif content_type == "text/plain":
-                # 纯文本内容
                 payload = part.get_payload(decode=True)
                 try:
                     text_content = payload.decode("utf-8")
@@ -748,7 +890,6 @@ class EmailAdapter(BaseAdapter):
                     except UnicodeDecodeError:
                         text_content = payload.decode("utf-8", errors="replace")
             elif content_type == "text/html":
-                # HTML内容
                 payload = part.get_payload(decode=True)
                 try:
                     html_content = payload.decode("utf-8")
@@ -761,25 +902,56 @@ class EmailAdapter(BaseAdapter):
         account = self.accounts.get(account_id)
         self_email = account.email if account else account_id
 
+        # 构建 OB12 标准消息段
+        message_segments = []
+
+        # 正文文本段
+        if text_content:
+            message_segments.append(
+                {"type": "text", "data": {"text": text_content}}
+            )
+        elif html_content and not text_content:
+            # 无纯文本时，从 HTML 提取简单文本
+            import re
+            simple_text = re.sub(r"<[^>]+>", "", html_content).strip()
+            if simple_text:
+                message_segments.append(
+                    {"type": "text", "data": {"text": simple_text}}
+                )
+
+        # 附件转为 OB12 file 消息段
+        for att in attachments:
+            message_segments.append(
+                {
+                    "type": "file",
+                    "data": {
+                        "file_id": att["filename"],
+                        "file_name": att["filename"],
+                        "size": att["size"],
+                    },
+                }
+            )
+
+        # 确保至少有一个消息段
+        if not message_segments:
+            message_segments.append({"type": "text", "data": {"text": subject or ""}})
+
         # 构建标准事件
         return {
             "id": email_message.get("Message-ID", ""),
             "time": self._parse_email_date(date),
             "type": "message",
-            "detail_type": "private",  # 邮件默认为私聊
+            "detail_type": "private",
             "platform": "email",
             "self": {"platform": "email", "user_id": self_email},
-            "message": [
-                {
-                    "type": "text",
-                    "data": {
-                        "text": f"Subject: {subject}\nFrom: {from_}\n\n{text_content}"
-                    },
-                }
-            ],
-            "alt_message": f"邮件: {subject}",
-            "user_id": from_,
-            # 平台原始数据（包含完整邮件信息）
+            "message": message_segments,
+            "alt_message": subject or text_content[:50] if text_content else "",
+            "user_id": clean_email or from_,
+            "user_nickname": display_name,
+            # 邮件扩展字段
+            "email_subject": subject,
+            "email_from": clean_email or from_,
+            # 平台原始数据（向后兼容）
             "email_raw": {
                 "subject": subject,
                 "from": from_,
@@ -794,8 +966,8 @@ class EmailAdapter(BaseAdapter):
                 "html_content": html_content,
                 "attachments": [att["filename"] for att in attachments],
             },
-            # 原始事件类型
             "email_raw_type": raw_event_type,
+            # 向后兼容：保留顶层 attachments
             "attachments": attachments,
         }
 
@@ -848,13 +1020,13 @@ class EmailAdapter(BaseAdapter):
         else:
             return self.make_error(
                 retcode=10002,
-                message=f"Unsupported endpoint: {endpoint}",
+                message=i18n.t("email.unsupported_endpoint", endpoint=endpoint, default="不支持的端点: {endpoint}"),
                 raw=None,
             )
 
     async def start(self):
         if not self.enabled_accounts:
-            self.logger.warning("没有找到任何启用的 Email 账户配置")
+            self.logger.warning(i18n.t("email.no_enabled_accounts", default="没有找到任何启用的 Email 账户配置"))
             return
 
         self._is_running = True
@@ -865,7 +1037,7 @@ class EmailAdapter(BaseAdapter):
                 await self._connect_smtp(account_name)
             except Exception as e:
                 self.logger.error(
-                    f"Failed to connect SMTP for {account_name}: {str(e)}"
+                    i18n.t("email.smtp_connect_failed", name=account_name, error=e, default="SMTP 连接失败 {name}: {error}")
                 )
             try:
                 await self.emit_meta("connect", account.email)
@@ -880,7 +1052,7 @@ class EmailAdapter(BaseAdapter):
                 )
 
         self.logger.info(
-            f"Email 适配器启动完成，共 {len(self.enabled_accounts)} 个账户"
+            i18n.t("email.adapter_started", count=len(self.enabled_accounts), default="Email 适配器启动完成，共 {count} 个账户")
         )
 
     async def shutdown(self):
@@ -922,4 +1094,4 @@ class EmailAdapter(BaseAdapter):
         except Exception:
             pass
 
-        self.logger.info("Email 适配器已关闭")
+        self.logger.info(i18n.t("email.adapter_shutdown", default="Email 适配器已关闭"))
