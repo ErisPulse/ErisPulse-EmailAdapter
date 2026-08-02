@@ -1,6 +1,25 @@
-# ErisPulse Email Adapter
+<div align="center">
 
-[English](#english) | [中文](#中文)
+<img src=".github/assets/ErisPulseLogo.png" width="180" alt="ErisPulse EmailAdapter" />
+
+# ErisPulse EmailAdapter
+
+**Send and receive emails as events — turn any mailbox into a Bot.**
+
+A powerful email adapter for the ErisPulse framework. It polls mailboxes for new messages and converts them into standard OneBot12 events, while emails are sent via the chainable Send DSL — with multi-account, attachments and HTML support.
+
+<p>
+  <a href="https://pypi.org/project/ErisPulse-EmailAdapter/"><img src="https://img.shields.io/pypi/v/ErisPulse-EmailAdapter?style=for-the-badge&logo=pypi&logoColor=white" alt="PyPI"></a>
+  <a href="https://pypi.org/project/ErisPulse-EmailAdapter/"><img src="https://img.shields.io/badge/Python-3.10+-FFD43B?style=for-the-badge&logo=python&logoColor=blue" alt="Python"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License"></a>
+  <a href="https://github.com/ErisPulse/ErisPulse-EmailAdapter"><img src="https://img.shields.io/github/stars/ErisPulse/ErisPulse-EmailAdapter?style=for-the-badge&logo=github&color=brightgreen" alt="Stars"></a>
+  <a href="https://pepy.tech/project/ErisPulse-EmailAdapter"><img src="https://img.shields.io/pepy/dt/ErisPulse-EmailAdapter?style=for-the-badge&color=blue" alt="Downloads"></a>
+  <a href="https://github.com/ErisPulse/ErisPulse"><img src="https://img.shields.io/badge/Powered_by-ErisPulse-FF6B9D?style=for-the-badge&logo=bookstack&logoColor=white" alt="ErisPulse"></a>
+</p>
+
+[English](#english) | [简体中文](#中文)
+
+</div>
 
 ---
 
