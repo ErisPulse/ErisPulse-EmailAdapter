@@ -15,17 +15,24 @@ from typing import BinaryIO, Dict, List, Optional, Union
 from ErisPulse.Core import adapter as adapter_mgr
 from ErisPulse.Core import client
 from ErisPulse.Core.Bases.adapter import BaseAdapter
+from ErisPulse.Core.Bases import BaseConfig, BotAccountConfig
+from ErisPulse.Core.Bases.config_schema import dict_to_dataclass
 from ErisPulse.Core.config import config as config_mgr
 from ErisPulse.Core.i18n import i18n
-from ErisPulse.runtime.config_schema import (
-    AdapterConfig,
-    BotAccountConfig,
-    dict_to_dataclass,
-)
+
+try:
+    from ErisPulse.runtime.tasks import spawn_background
+except ImportError:  # pragma: no cover
+    spawn_background = None
+
+__version__ = "4.2.0"
+
+# 软依赖的框架最低版本（运行时检测，仅提示不强制）
+MIN_FRAMEWORK_VERSION = (2, 7, 1)
 
 
 @dataclass
-class EmailGlobalConfig(AdapterConfig):
+class EmailGlobalConfig(BaseConfig):
     """Email 适配器全局配置（适用于所有账户的默认值）"""
 
     imap_server: str = field(
@@ -172,11 +179,53 @@ EmailAccountConfig._schema_meta = {
 
 
 class EmailAdapter(BaseAdapter):
-    """Email 适配器（多账户），基于 stdlib smtplib/imaplib 实现"""
+    """Email 邮件适配器（多账户管理，基于 stdlib smtplib/imaplib 实现）"""
 
     _platform = "email"
     AccountConfigClass = EmailAccountConfig
     ConfigClass = EmailGlobalConfig
+
+    # ==================== Api DSL（最小集） ====================
+
+    class Api(BaseAdapter.Api):
+        """Email 标准 API 动作实现（最小集）
+
+        {!--< tips >!--}
+        1. get_self_info → 返回账户邮箱地址
+        2. Email 平台无群组/频道/撤回等概念，相关标准动作由默认实现返回 retcode=10002
+        {!--< /tips >!--}
+        """
+
+        async def get_self_info(self) -> dict:
+            account_name, account = self._adapter._resolve_account(self._account_id)
+            return self._adapter.make_response(
+                data={
+                    "user_id": account.email,
+                    "user_name": account.email.split("@")[0],
+                    "user_displayname": account.email,
+                }
+            )
+
+        async def get_status(self) -> dict:
+            ad = self._adapter
+            bots = []
+            for name, account in ad.accounts.items():
+                bots.append({
+                    "self": {"platform": ad.platform, "user_id": account.email, "account_id": name},
+                    "online": ad._is_running and name in ad.poll_tasks,
+                })
+            return ad.make_response(data={"good": any(b["online"] for b in bots), "bots": bots})
+
+        async def get_version(self) -> dict:
+            from . import __version__
+
+            return self._adapter.make_response(
+                data={"impl": "ErisPulse-EmailAdapter", "version": __version__, "onebot_version": "12"}
+            )
+
+        async def get_supported_actions(self) -> dict:
+            actions = {"get_self_info", "get_status", "get_version", "get_supported_actions"}
+            return self._adapter.make_response(data=sorted(actions))
 
     class Send(BaseAdapter.Send):
         """邮件发送 DSL
@@ -469,6 +518,38 @@ class EmailAdapter(BaseAdapter):
         # 运行状态
         self._is_running = False
         self._register_i18n()
+        self._check_framework_version()
+        self._get_logger().info(f"EmailAdapter v{__version__} 已加载")
+
+    @staticmethod
+    def _parse_version(version_str: str) -> tuple:
+        """解析版本号为可比较的三元组（忽略 dev/预发布后缀，如 2.8.0-dev.3 → (2, 8, 0)）"""
+        parts = []
+        for piece in str(version_str).split("."):
+            digits = "".join(ch for ch in piece if ch.isdigit())
+            parts.append(int(digits) if digits else 0)
+        while len(parts) < 3:
+            parts.append(0)
+        return tuple(parts[:3])
+
+    def _check_framework_version(self):
+        """软依赖检测：框架版本过低时打警告（不阻断加载）"""
+        try:
+            from importlib.metadata import version as _pkg_version
+
+            raw = _pkg_version("ErisPulse")
+        except Exception:
+            return
+        try:
+            if self._parse_version(raw) < MIN_FRAMEWORK_VERSION:
+                self._get_logger().warning(
+                    f"当前 ErisPulse 版本 {raw} 过低：EmailAdapter v{__version__} 需要 >= "
+                    f"{'.'.join(map(str, MIN_FRAMEWORK_VERSION))}"
+                    "（spawn_background 等特性），"
+                    "部分功能可能不可用，建议升级框架"
+                )
+        except Exception:
+            pass
 
     def _register_i18n(self):
         """注册配置字段与日志消息的 i18n 翻译"""
@@ -1047,8 +1128,10 @@ class EmailAdapter(BaseAdapter):
         # 启动轮询任务（仅对配置了 IMAP 的账户）
         for account_name, account in self.enabled_accounts.items():
             if account.imap_server:
-                self.poll_tasks[account_name] = asyncio.create_task(
-                    self._poll_emails(account_name)
+                coro = self._poll_emails(account_name)
+                # 生命周期任务使用 spawn_background（owner 归属，shutdown 自动回收）
+                self.poll_tasks[account_name] = (
+                    spawn_background(coro) if spawn_background is not None else asyncio.create_task(coro)
                 )
 
         self.logger.info(
