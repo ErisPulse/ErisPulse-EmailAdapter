@@ -1,7 +1,10 @@
 import asyncio
+import base64
 import email
 import html as _html
 import imaplib
+import mimetypes
+import re
 import smtplib
 import ssl
 import time
@@ -12,6 +15,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Union
+from urllib.parse import unquote, urlparse
 
 from ErisPulse.Core import adapter as adapter_mgr
 from ErisPulse.Core import client
@@ -26,7 +30,7 @@ try:
 except ImportError:  # pragma: no cover
     spawn_background = None
 
-__version__ = "4.3.0"
+__version__ = "4.3.1"
 
 # 软依赖的框架最低版本（运行时检测，仅提示不强制）
 MIN_FRAMEWORK_VERSION = (2, 7, 1)
@@ -97,6 +101,89 @@ def _wrap_email_html(body: str) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         "</head><body>" + body + "</body></html>"
     )
+
+
+def _strip_file_scheme(path: str) -> str:
+    """剥除 file:// 前缀并解码百分号编码（file:///D:/a%20b.png → D:/a b.png）"""
+    if path.startswith("file://"):
+        path = unquote(path[len("file://"):])
+        if re.match(r"^/[A-Za-z]:", path):
+            path = path[1:]
+    return path
+
+
+def _decode_bare_base64(text: str) -> Optional[bytes]:
+    """裸 base64 字符串解码，非法格式返回 None"""
+    text = text.strip()
+    if not text or len(text) % 4 != 0:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", text):
+        return None
+    try:
+        return base64.b64decode(text, validate=True)
+    except Exception:
+        return None
+
+
+def _decode_data_uri(uri: str) -> tuple:
+    """data: URI 解码为 (bytes, 失败原因)；;base64 载荷按 base64 解码，其余按 URL 编码文本解码"""
+    header, sep, payload = uri.partition(",")
+    if not sep:
+        return None, "data URI 缺少 , 分隔符"
+    if ";base64" in header:
+        try:
+            return base64.b64decode(payload.strip()), None
+        except Exception as e:
+            return None, f"data URI base64 解码失败: {e}"
+    return unquote(payload).encode("utf-8"), None
+
+
+def _detect_mime_from_magic(data: bytes) -> str:
+    """按文件头魔数探测 MIME 类型，未识别返回空字符串"""
+    if not data or len(data) < 12:
+        return ""
+    h = data[:16]
+    if h[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if h[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if h[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if h[:4] == b"RIFF" and h[8:12] == b"WEBP":
+        return "image/webp"
+    if h[:4] == b"RIFF" and h[8:12] == b"WAVE":
+        return "audio/wav"
+    if h[4:8] == b"ftyp":
+        return "video/mp4"
+    if h[:3] == b"ID3" or h[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return "audio/mpeg"
+    if h[:4] == b"OggS":
+        return "audio/ogg"
+    if h[:4] == b"%PDF-":
+        return "application/pdf"
+    if h[:4] == b"PK\x03\x04":
+        return "application/zip"
+    return ""
+
+
+_MIME_EXT_FALLBACK = {
+    "image/jpeg": ".jpg",
+    "audio/wav": ".wav",
+    "audio/ogg": ".ogg",
+    "audio/mpeg": ".mp3",
+    "video/mp4": ".mp4",
+}
+
+
+def _default_attachment_filename(data: bytes) -> str:
+    """无文件名附件的默认名：attachment + 按魔数/mimetypes 推测的扩展名，探测不出用 bin"""
+    mime = _detect_mime_from_magic(data)
+    ext = ""
+    if mime:
+        ext = mimetypes.guess_extension(mime) or _MIME_EXT_FALLBACK.get(mime, "")
+    if not ext:
+        return "attachment.bin"
+    return "attachment" + (ext if ext.startswith(".") else "." + ext)
 
 
 @dataclass
@@ -380,26 +467,25 @@ class EmailAdapter(BaseAdapter):
             if "in_reply_to" in kwargs:
                 self._in_reply_to = kwargs["in_reply_to"]
 
+            # dict 单段先归一为列表，使修饰符同样生效
+            if isinstance(message, dict):
+                message = [message]
+
             # 应用修饰符（@/回复等），由基类内置 At/AtAll/Reply 写入
             if isinstance(message, list):
                 message = self._apply_modifiers(message)
 
             # 统一处理为消息段数组
-            if isinstance(message, dict) and message.get("type") in [
-                "text",
-                "image",
-                "video",
-                "file",
-                "audio",
-                "node",
-            ]:
-                segments = [message]
-            elif isinstance(message, list):
-                segments = message
-            else:
-                raise ValueError(
-                    "Invalid message format, expected OneBot12 message segment or array"
+            if not isinstance(message, list):
+                self._adapter.logger.warning(
+                    "Invalid message format, expected OneBot12 message segment or "
+                    f"array, got {type(message).__name__}"
                 )
+                return self._adapter.make_error(
+                    retcode=10002,
+                    message="Invalid message format, expected OneBot12 message segment or array",
+                )
+            segments = message
 
             # node 段解析：纯 node 列表自动路由合并转发邮件；混合列表降级为纯文本
             if segments and all(
@@ -416,6 +502,19 @@ class EmailAdapter(BaseAdapter):
                     self._text += data.get("text", "")
                 elif seg_type == "node":
                     self._text += _forward_nodes_plain(segment)
+                elif seg_type == "mention":
+                    # mention 段映射为 Cc（与 At() 修饰器路径一致）
+                    user_id = data.get("user_id")
+                    if user_id:
+                        self._cc.append(str(user_id))
+                elif seg_type == "mention_all":
+                    # mention_all 段与 AtAll() 修饰器一致，由 _send 加 [Broadcast] 主题标记
+                    self._at_all = True
+                elif seg_type == "reply":
+                    # reply 段映射为 In-Reply-To（与 Reply() 修饰器路径一致）
+                    message_id = str(data.get("message_id") or "")
+                    if message_id and not self._reply_message_id:
+                        self._reply_message_id = message_id
                 elif seg_type == "image":
                     self._add_attachment_from_segment(data, "image")
                 elif seg_type == "video":
@@ -427,42 +526,42 @@ class EmailAdapter(BaseAdapter):
                 elif seg_type == "markdown":
                     self._html = self._markdown_to_html(data.get("markdown", ""))
                 else:
-                    # 不支持的类型，转换为文本
+                    self._adapter.logger.warning(f"Unsupported segment type: {seg_type}")
                     self._text += f"\n[Unsupported segment type: {seg_type}]"
 
             return await self._send()
 
         def _add_attachment_from_segment(self, data: Dict, content_type: str):
-            """从消息段数据添加附件，支持本地路径"""
-            url = data.get("url")
-            file_id = data.get("file_id")
-            path = data.get("path")
+            """从消息段数据登记附件：file 引用优先取标准键 data.file，兼容 url/path/file_id；附件名取 data.filename"""
+            file_ref = data.get("file")
+            if file_ref is None:
+                file_ref = data.get("url") or data.get("path") or data.get("file_id")
+            if file_ref is None:
+                self._adapter.logger.warning(
+                    f"附件段缺少 file/url/path/file_id，已跳过: {data}"
+                )
+                return
 
-            if url:
-                self._attachments.append(
-                    (
-                        url,
-                        f"{content_type}_{path or file_id}",
-                        f"application/{content_type}",
-                    )
-                )
-            elif path:
-                # 本地路径，检查文件是否存在
-                file_path = Path(path)
-                if not file_path.exists():
-                    raise FileNotFoundError(f"文件不存在: {path}")
-                filename = f"{content_type}_{file_id}" if file_id else file_path.name
-                self._attachments.append(
-                    (path, filename, f"application/{content_type}")
-                )
-            elif file_id:
-                self._attachments.append(
-                    (
-                        file_id,
-                        f"{content_type}_{file_id}",
-                        f"application/{content_type}",
-                    )
-                )
+            if isinstance(file_ref, str):
+                path = _strip_file_scheme(file_ref)
+                if path.startswith("data:"):
+                    payload, reason = _decode_data_uri(path)
+                    if payload is None:
+                        self._adapter.logger.warning(f"附件 data URI 解码失败，已跳过: {reason}")
+                        return
+                    file_ref = payload
+                elif not path.startswith(("http://", "https://")):
+                    decoded = _decode_bare_base64(path)
+                    if decoded is not None:
+                        file_ref = decoded
+                    else:
+                        file_ref = path
+                else:
+                    file_ref = path
+
+            self._attachments.append(
+                (file_ref, data.get("filename"), f"application/{content_type}")
+            )
 
         def _markdown_to_html(self, markdown: str) -> str:
             """简单的 Markdown 到 HTML 转换"""
@@ -557,33 +656,53 @@ class EmailAdapter(BaseAdapter):
             if self._html:
                 msg.attach(MIMEText(self._html, "html"))
 
-            # 添加附件
+            # 添加附件（下载/读取失败时告警并跳过该附件）
             for attachment in self._attachments:
                 file, filename, mime_type = attachment
 
-                if isinstance(file, (str, Path)):
-                    # 检查是否为 URL
-                    if isinstance(file, str) and file.startswith(
-                        ("http://", "https://")
-                    ):
+                if isinstance(file, bytes):
+                    file_data = file
+                elif isinstance(file, (str, Path)):
+                    source = str(file)
+                    if source.startswith(("http://", "https://")):
                         # 通过 sdk.client.get 下载 URL 内容
-                        resp = await client.get(file, timeout=30)
-                        if hasattr(resp, "status") and resp.status >= 400:
-                            raise RuntimeError(f"下载附件失败: HTTP {resp.status}")
-                        file_data = await resp.read()
-                        file_name = filename or file.split("/")[-1]
+                        try:
+                            resp = await client.get(source, timeout=30)
+                            if hasattr(resp, "status") and resp.status >= 400:
+                                adapter.logger.warning(
+                                    f"下载附件失败，已跳过: {source} (HTTP {resp.status})"
+                                )
+                                continue
+                            file_data = await resp.read()
+                        except Exception as e:
+                            adapter.logger.warning(f"下载附件失败，已跳过: {source} ({e})")
+                            continue
+                        if not filename:
+                            # 文件名取 URL 路径最后一段（不含 query/fragment）
+                            filename = unquote(urlparse(source).path.split("/")[-1]) or None
                     else:
                         # 本地文件路径
-                        with open(file, "rb") as f:
-                            file_data = f.read()
-                        file_name = filename or Path(file).name
+                        try:
+                            with open(source, "rb") as f:
+                                file_data = f.read()
+                        except Exception as e:
+                            adapter.logger.warning(f"读取附件失败，已跳过: {source} ({e})")
+                            continue
+                        if not filename:
+                            filename = Path(source).name
                 else:
-                    # 二进制数据
-                    file_data = file.read()
-                    file_name = filename
+                    # file-like 对象
+                    try:
+                        file_data = file.read()
+                    except Exception as e:
+                        adapter.logger.warning(f"读取附件流失败，已跳过: {e}")
+                        continue
 
-                part = MIMEApplication(file_data, Name=file_name)
-                part["Content-Disposition"] = f'attachment; filename="{file_name}"'
+                if not filename:
+                    filename = _default_attachment_filename(file_data)
+
+                part = MIMEApplication(file_data, Name=filename)
+                part["Content-Disposition"] = f'attachment; filename="{filename}"'
                 msg.attach(part)
 
             # 发送邮件
