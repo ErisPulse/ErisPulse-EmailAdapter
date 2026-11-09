@@ -30,7 +30,7 @@ try:
 except ImportError:  # pragma: no cover
     spawn_background = None
 
-__version__ = "4.3.1"
+__version__ = "4.3.2"
 
 # 软依赖的框架最低版本（运行时检测，仅提示不强制）
 MIN_FRAMEWORK_VERSION = (2, 7, 1)
@@ -405,6 +405,10 @@ class EmailAdapter(BaseAdapter):
             self._subject = subject
             return self
 
+        def HTML(self, html: str):
+            """HTML 别名：与标准 Send 方法命名（全大写）保持一致"""
+            return self.Html(html)
+
         def Html(self, html: str):
             """设置 HTML 内容并发送邮件"""
             self._html = html
@@ -726,7 +730,15 @@ class EmailAdapter(BaseAdapter):
                 return response
             except Exception as e:
                 adapter.logger.error(i18n.t("email.send_failed", error=e, default="发送邮件失败: {error}"))
-                err = adapter.make_error(retcode=34000, message=str(e), raw=None)
+                # SMTP 拒绝（收件人/发件人/数据/认证被拒）→ 34100；连接类失败 → 33001
+                smtp_reject = (
+                    smtplib.SMTPRecipientsRefused,
+                    smtplib.SMTPSenderRefused,
+                    smtplib.SMTPDataError,
+                    smtplib.SMTPAuthenticationError,
+                )
+                retcode = 34100 if isinstance(e, smtp_reject) else 33001
+                err = adapter.make_error(retcode=retcode, message=str(e), raw=None)
                 err["email_raw"] = None
                 return err
 
@@ -1240,8 +1252,11 @@ class EmailAdapter(BaseAdapter):
             message_segments.append({"type": "text", "data": {"text": subject or ""}})
 
         # 构建标准事件
+        # Message-ID 缺失时回退 uuid，避免事件 id 重复被下游去重吞掉邮件
+        message_id = str(email_message.get("Message-ID") or uuid.uuid4())
         return {
-            "id": email_message.get("Message-ID", ""),
+            "id": message_id,
+            "message_id": message_id,
             "time": self._parse_email_date(date),
             "type": "message",
             "detail_type": "private",
@@ -1285,7 +1300,9 @@ class EmailAdapter(BaseAdapter):
 
     async def call_api(self, endpoint: str, _account_id: str = None, **params):
         # 多账户解析（确保账户存在，未指定时使用默认账户）
-        account_name, account = self._resolve_account(_account_id)
+                # 标准字段 account_id 与旧名 _account_id 双兼容（ApiDSL.Using 传标准名）
+        account_id = params.pop("account_id", None) or _account_id
+        account_name, account = self._resolve_account(account_id)
 
         if endpoint == "send":
             send_instance = self.Send(
